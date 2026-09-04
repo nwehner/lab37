@@ -23,6 +23,17 @@ platform), `restaurant` (5 distinct names), `first_name`, `last_name`, `total` (
 payload — these are **cancellation events for an already-seen `order_id`**, not new orders.
 This is the "real-time / bursty" pipeline.
 
+> **Correction (Phase 3 implementation, verified against the real file):** the 1,004 lines
+> contain only **998 distinct `order_id`s**, not 1,004. Beyond the 2 documented cancellation
+> lines (each referencing an `order_id` seen earlier in the file), **4 more `order_id`s each
+> appear twice** as plain, non-cancellation redeliveries — genuine webhook-retry-shaped
+> duplicates already present in the sample data, not something we injected for testing. Found
+> by replaying the full file through `scripts/replay_webhook.py` against a live server and
+> inspecting the resulting row count (998 orders, not 1,004); see the Phase 3 progress note
+> below. The upsert-by-`(source, external_id)` design in §4.1 already handles this case
+> correctly without modification — it was designed for redelivery in general, this just
+> confirms the real corpus exercises it.
+
 **`api_responses.jsonl`** — 100 lines, each one snapshot of a polling call:
 `{"response": 200 | 500, "data": {...}, "error"?: str}`. `data` is a dict keyed by an opaque
 per-item hash, not by order — each value is
@@ -535,8 +546,56 @@ already reflected in the model/route code above).
 - Verified clean: `mypy --strict` (24 source files) and `pytest` (13 tests), both
   passing.
 
-Not started: webhook pipeline, polling pipeline, orders API/dashboard, dispatch,
-polish (phases 3–7).
+**Phase 3 — Webhook pipeline: complete.**
+
+- `app/ingestion/webhook.py`: `ingest_webhook_order()` implements §4.1 — a
+  `WebhookOrderPayload` pydantic model validates the incoming JSON shape; a
+  malformed payload raises `WebhookIngestionError`, which the route maps to
+  `400` (mirroring `CsvIngestionError`'s pattern), after logging a failed
+  `IngestionRun` rather than silently dropping it. On a valid payload:
+  upsert `Order` by `(WEBHOOK, order_id)` — a brand-new `order_id` creates
+  the order plus its items and an `ORDER_RECEIVED` event; a redelivered
+  `order_id` replaces the order's fields and wholesale-replaces its items
+  (no per-item id to diff against) and appends `ORDER_UPDATED`; `update:
+  ["cancelled"]` sets `status = CANCELLED` and appends `ORDER_CANCELLED`.
+  One deviation from §4.1's literal reading: a cancellation for an
+  `order_id` never seen before (not present in the sample data, but
+  possible in principle since the cancellation payload carries every field
+  a creation payload does) still ingests the order rather than erroring,
+  since rejecting data with enough information to process would contradict
+  §3's fault-tolerance intent.
+- `POST /ingest/webhook/orders` wired in `app/api/routes/ingest.py`; the
+  route accepts a raw `dict[str, Any]` body rather than a typed Pydantic
+  request model, so shape validation happens inside
+  `ingest_webhook_order()` (where it can log the `IngestionRun`) instead of
+  short-circuiting to FastAPI's automatic `422` before that logging runs.
+- `backend/scripts/replay_webhook.py`: CLI that POSTs each line of a
+  `webhook_orders.jsonl`-shaped file to a running server, with `--delay` to
+  simulate bursty traffic, `--limit` for partial replays, and `--base-url`
+  to target any running instance. Verified live (not just via
+  `TestClient`) against an actual `uvicorn` process: replayed all 1,004
+  real lines successfully, then re-replayed the first 5 lines to confirm
+  redelivery doesn't duplicate orders. This surfaced a corpus detail
+  beyond §1's original characterization — of 1,004 lines there are only
+  998 distinct `order_id`s: the 2 documented cancellation lines each
+  reference an already-seen id (as §1 says), plus **4 more `order_id`s
+  each appear twice as plain (non-cancellation) redeliveries** — real
+  webhook-retry-shaped duplicates in the sample data itself, not
+  synthetic. The upsert logic handles both cases identically without
+  special-casing, confirmed by direct DB inspection (998 orders, exactly 2
+  `CANCELLED`, first redelivered order's event history showing
+  `ORDER_RECEIVED` then two `ORDER_UPDATED`s).
+- Tests: `tests/test_webhook_ingestion.py` (5 tests) — new-order creation,
+  redelivery-upserts-not-duplicates, cancellation-of-existing-order,
+  malformed-payload-rejected-and-logged, and a full-corpus end-to-end test
+  against the real `specs/webhook_orders.jsonl` asserting the order count
+  matches the 998 unique ids and exactly the 2 documented ids end up
+  `CANCELLED`.
+- Verified clean: `mypy --strict` (20 source files) and `pytest` (18
+  tests), both passing.
+
+Not started: polling pipeline, orders API/dashboard, dispatch, polish
+(phases 4–7).
 
 ## 13. Explicit non-goals / open questions for "next steps"
 

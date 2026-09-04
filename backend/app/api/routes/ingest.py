@@ -1,20 +1,28 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlmodel import Session
 
 from app.api.schemas import CsvUploadSummary, IngestionRunListResponse, IngestionRunRead, OrderRead
 from app.db import get_session
 from app.ingestion.csv_upload import CsvIngestionError, ingest_csv_upload
+from app.ingestion.webhook import WebhookIngestionError, ingest_webhook_order
 
 router = APIRouter(tags=["ingestion"])
 
 
 @router.post("/ingest/webhook/orders")
-async def receive_webhook_order(request: Request) -> OrderRead:
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="not implemented yet")
+async def receive_webhook_order(
+    payload: dict[str, Any],
+    session: Annotated[Session, Depends(get_session)],
+) -> OrderRead:
+    try:
+        order = ingest_webhook_order(session, payload)
+    except WebhookIngestionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return OrderRead.model_validate(order)
 
 
 @router.post("/ingest/poll/trigger")
