@@ -16,5 +16,5 @@ def test_route_stubs_registered() -> None:
     with TestClient(app) as client:
         assert client.get("/orders").status_code == 200
         assert client.get("/ingestion/runs").status_code == 200
-        # Dispatch (plan phase 6) is still an unimplemented stub.
-        assert client.post(f"/orders/{uuid.uuid4()}/dispatch").status_code == 501
+        # Dispatch (plan phase 6) is implemented; a nonexistent order 404s.
+        assert client.post(f"/orders/{uuid.uuid4()}/dispatch").status_code == 404

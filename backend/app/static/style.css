@@ -355,6 +355,18 @@ body {
   align-items: flex-start;
 }
 
+.order-detail-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+.dispatch-error {
+  color: var(--color-error);
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

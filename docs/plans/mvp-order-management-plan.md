@@ -742,7 +742,46 @@ already reflected in the model/route code above).
 - Verified clean: `mypy --strict` (35 source files under `app/`, `tests/`,
   `scripts/`, `mock_upstream/`) and `pytest` (36 tests), both passing.
 
-Not started: dispatch, polish (phases 6–7).
+**Phase 6 — Dispatch: complete.**
+
+- `app/services/dispatch.py`: `dispatch_order(session, order)` implements §6 —
+  rejects (`DispatchError`) an order that's already `DISPATCHED`, `CANCELLED`,
+  or has zero items; otherwise builds the `RobotDispatchPayload` skeleton
+  (`requested_for` derived from `for_tomorrow` when set, `None` for
+  non-CSV orders that don't carry it), appends an `ORDER_DISPATCHED` event
+  with the payload as `detail`, sets `status = DISPATCHED`, and commits.
+  `POST /orders/{id}/dispatch` (`app/api/routes/orders.py`) replaces its
+  `501` stub: 404 for an unknown order, 400 with the `DispatchError` message
+  for a non-dispatchable one, else 200 with the payload.
+- `order_detail.html` gained a "Dispatch to robot" button (visible only when
+  `order.status` isn't already `dispatched`/`cancelled` and the order has
+  items) next to the status badge, following §7's pill-button/one-accent
+  pattern already used for "Trigger poll." `app/app.js` gained
+  `initDispatchButton()` (same fetch-then-reload shape as
+  `initPollTrigger()`, plus an inline error message on failure instead of
+  the poll button's `alert()`, since a dispatch rejection has a specific
+  reason worth showing).
+- Verified live in an actual browser (Chrome, not `TestClient`): booted the
+  app as a real `uvicorn` process, ingested a webhook order, opened its
+  detail page, clicked "Dispatch to robot," and confirmed the badge flips to
+  a blue `dispatched` pill, the button disappears (no longer dispatchable),
+  and "Order Dispatched" appears in the history timeline — all without a
+  full page navigation beyond the button's own reload. Also verified over
+  raw HTTP (a second live `uvicorn` process, not just the browser): a second
+  dispatch attempt on the same order 400s with "order is already
+  dispatched."
+- Tests: `tests/test_dispatch.py` (5 tests) — successful dispatch (status
+  transition, event ordering, payload contents), rejecting an
+  already-dispatched order, rejecting a cancelled order, rejecting a
+  zero-item order (constructed directly via the DB session, since no real
+  ingestion pipeline produces one), and 404 on a nonexistent order.
+  `tests/test_app_boots.py`'s stub-route assertion updated: dispatching a
+  nonexistent order now asserts `404` (real not-found handling) instead of
+  the old `501` stub response.
+- Verified clean: `mypy --strict` (36 source files) and `pytest` (41 tests),
+  both passing.
+
+Not started: polish (phase 7).
 
 ## 13. Explicit non-goals / open questions for "next steps"
 

@@ -10,7 +10,8 @@ from app.api.schemas import OrderEventRead, OrderListResponse, OrderRead
 from app.db import get_session
 from app.models import IngestionSource, MealType, OrderStatus
 from app.services import queries
-from app.services.dispatch import RobotDispatchPayload
+from app.services.dispatch import DispatchError, RobotDispatchPayload
+from app.services.dispatch import dispatch_order as dispatch_order_service
 
 router = APIRouter(tags=["orders"])
 
@@ -66,5 +67,14 @@ def get_order_events(
 
 
 @router.post("/orders/{order_id}/dispatch")
-def dispatch_order(order_id: uuid.UUID) -> RobotDispatchPayload:
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="not implemented yet")
+def dispatch_order(
+    order_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+) -> RobotDispatchPayload:
+    order = queries.get_order_by_id(session, order_id)
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="order not found")
+    try:
+        return dispatch_order_service(session, order)
+    except DispatchError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

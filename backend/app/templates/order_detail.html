@@ -15,7 +15,13 @@
 </header>
 
 <section class="card order-detail-summary">
-  <span class="badge {{ 'badge-accent' if order.status.value in ('delivered', 'dispatched') else '' }}">{{ order.status.value }}</span>
+  <div class="order-detail-summary-header">
+    <span class="badge {{ 'badge-accent' if order.status.value in ('delivered', 'dispatched') else '' }}">{{ order.status.value }}</span>
+    {% if order.status.value not in ('dispatched', 'cancelled') and order.items %}
+    <button id="dispatch-btn" class="btn btn-primary" type="button" data-order-id="{{ order.id }}">Dispatch to robot</button>
+    {% endif %}
+  </div>
+  <p id="dispatch-error" class="empty-state dispatch-error" hidden></p>
   <dl class="detail-grid">
     <div><dt>Created</dt><dd>{{ order.created_at.strftime("%b %d, %Y %H:%M") }}</dd></div>
     <div><dt>Updated</dt><dd>{{ order.updated_at.strftime("%b %d, %Y %H:%M") }}</dd></div>
@@ -58,4 +64,8 @@
   <p class="empty-state">No events yet.</p>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/app.js"></script>
 {% endblock %}

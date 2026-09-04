@@ -1,6 +1,7 @@
 (function () {
   initUploadForm();
   initPollTrigger();
+  initDispatchButton();
 
   function initUploadForm() {
     const form = document.getElementById("upload-form");
@@ -72,6 +73,47 @@
         pollBtn.textContent = originalLabel;
         alert("Poll trigger failed. Check that a polling upstream is configured.");
       }
+    });
+  }
+
+  function initDispatchButton() {
+    const dispatchBtn = document.getElementById("dispatch-btn");
+    if (!dispatchBtn) return;
+
+    const errorEl = document.getElementById("dispatch-error");
+
+    dispatchBtn.addEventListener("click", async () => {
+      const orderId = dispatchBtn.dataset.orderId;
+      const originalLabel = dispatchBtn.textContent;
+      dispatchBtn.disabled = true;
+      dispatchBtn.textContent = "Dispatching…";
+      if (errorEl) errorEl.hidden = true;
+
+      let response;
+      try {
+        response = await fetch(`/orders/${orderId}/dispatch`, { method: "POST" });
+      } catch (err) {
+        dispatchBtn.disabled = false;
+        dispatchBtn.textContent = originalLabel;
+        if (errorEl) {
+          errorEl.textContent = "Dispatch failed: could not reach the server.";
+          errorEl.hidden = false;
+        }
+        return;
+      }
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        dispatchBtn.disabled = false;
+        dispatchBtn.textContent = originalLabel;
+        if (errorEl) {
+          errorEl.textContent = `Dispatch failed: ${(detail && detail.detail) || response.statusText}`;
+          errorEl.hidden = false;
+        }
+        return;
+      }
+
+      window.location.reload();
     });
   }
 })();
