@@ -316,7 +316,9 @@ adaptation:
 - `/` — orders dashboard: table of unified orders, filterable by source/status/restaurant/meal,
   plus a small "ingestion activity" panel (last poll result, recent webhook/CSV run counts) so
   pipeline health is visible without an admin system.
-- `/orders/{id}` — order detail: current fields + items + full event/history timeline.
+- `/orders/{id}/view` — order detail page: current fields + items + full event/history
+  timeline. (Deviates from this section's original `/orders/{id}` — see the Phase 5 progress
+  note below for why the page and the §5 JSON API at `/orders/{id}` couldn't share one path.)
 - `/upload` — CSV upload form; on submit, shows a per-file summary (rows ingested, rows with
   warnings) rather than a bare success/fail.
 
@@ -660,7 +662,87 @@ already reflected in the model/route code above).
   `mock_upstream/`, 32 including `tests/` and `scripts/`) and `pytest` (25
   tests), both passing.
 
-Not started: orders API/dashboard, dispatch, polish (phases 5–7).
+**Phase 5 — Orders API + dashboard: complete.**
+
+- `app/services/queries.py`: shared read-query helpers (`list_orders` with
+  `source`/`order_status`/`restaurant`/`meal` filters and offset/limit
+  pagination, `get_order_by_id`, `list_order_events`, `list_ingestion_runs`,
+  `list_distinct_restaurants`) used by both the JSON API routes and the
+  Jinja2 page handlers, so the two never duplicate query logic or make an
+  HTTP call back into the same app to render a page.
+- `GET /orders`, `GET /orders/{id}/events`, and `GET /ingestion/runs` wired
+  in `app/api/routes/{orders,ingest}.py` per §5, replacing their `501`
+  stubs; a missing order 404s rather than 200-with-null.
+- One deviation from §5/§7's literal path tables, found while implementing:
+  both sections name `/orders/{id}` — §5 as the JSON detail API, §7 as the
+  server-rendered detail *page* — which can't both be registered as
+  separate FastAPI routes (identical path + method always resolves to
+  whichever is registered first, full stop; Starlette's router doesn't
+  consider `Accept` at all). First tried content negotiation inside one
+  handler (branch on the `Accept` header, return either the JSON model or
+  a rendered template), then reconsidered: a single handler silently
+  serving two different response shapes off one path is surprising to
+  read and to call, and doesn't compose with `response_model` cleanly. Not
+  worth it for what a rename solves outright, so the page moved instead —
+  the JSON API stays at the literal `GET /orders/{id}` from §5, and the
+  HTML page from §7 now lives at `GET /orders/{id}/view` (registered in
+  `app/api/routes/pages.py`, not `orders.py`), two ordinary routes with no
+  overlap. `GET /orders` and `GET /orders/{id}/events` had no such
+  collision to begin with (the dashboard's own page lives at `/`, and
+  there's no separate events page — history is embedded in the detail
+  page), so they stay pure JSON and unrenamed.
+- `app/web.py`: one shared `Jinja2Templates` instance, imported by both
+  `app/api/routes/pages.py` handlers (`dashboard`, `order_detail_page`,
+  `upload_page`), replacing `pages.py`'s previously private instance.
+- `app/templates/dashboard.html` (new, served at `/` per §7) — a
+  server-rendered order list (no client-side fetch/JS, per §7's "no SPA"
+  direction): a `<form method="get">` of source/status/restaurant/meal
+  `<select>`s re-requests `/` with those as query params, so filtering
+  works with zero JavaScript; an ingestion-activity panel above it lists
+  the 10 most recent `IngestionRun`s with outcome/source/counts/timestamp
+  and a "Trigger poll" button. `app/templates/order_detail.html` (new)
+  renders current fields, items (with category/price/status where the
+  polling pipeline populated them), and the full event timeline per §7.
+  Followed §7's visual direction already established in Phase 2's
+  `upload.html`/`style.css` (pill buttons/badges, one blue accent reserved
+  for "good" states — `success` runs and `delivered`/`dispatched` orders —
+  everything else neutral gray) rather than introducing new patterns;
+  added the order-list-row, ingestion-panel, filters, and detail-page
+  styles to `style.css` to match.
+- `app/static/app.js` restructured from one script gated on `#upload-form`
+  existing (which meant nothing after it could ever run on a page without
+  that element) into two independently-guarded init functions,
+  `initUploadForm()` and the new `initPollTrigger()` — the latter POSTs
+  `/ingest/poll/trigger` from the dashboard's button and reloads the page
+  on success, satisfying §7's "minimal vanilla JS only for the upload form
+  and the manual poll-trigger button."
+- Verified live in an actual browser (Chrome, not just `TestClient`):
+  booted the app plus `mock_upstream` as separate `uvicorn` processes,
+  replayed 15 webhook orders, uploaded `specs/orders_1.csv`, and polled the
+  mock upstream 5 times, then loaded `/`, filtered by `source=webhook`, and
+  opened detail pages for a CSV-sourced order (name/meal/single item, no
+  restaurant/total), a webhook-sourced order (restaurant/total/multi-item),
+  and a polling-sourced order (no customer name — renders "Unknown" rather
+  than crashing — items with category/price/status pills). Caught and
+  fixed two cosmetic bugs this way that no test would have: `IngestionSource`/
+  `OrderEventType` enum values rendered with a literal underscore (e.g.
+  "Csv_upload", "Order_received") under the existing CSS `capitalize`
+  transform, which only capitalizes the first letter — fixed by replacing
+  underscores with spaces in the templates before display.
+- Tests: `tests/test_orders_api.py` (11 tests) — empty list, list after
+  ingestion, filtering by source/restaurant/status, JSON order detail at
+  `GET /orders/{id}`, the HTML order detail page at
+  `GET /orders/{id}/view`, 404 on the JSON detail, HTML detail, and events
+  routes for an unknown id, event timeline ordering across a
+  create-then-redeliver sequence, dashboard page rendering ingested data,
+  and the ingestion-runs listing. `tests/test_app_boots.py`'s stub-route
+  smoke test updated: `/orders` and `/ingestion/runs` now assert `200`
+  instead of `501`, and a new assertion confirms `/orders/{id}/dispatch`
+  (phase 6, not yet built) still correctly 501s.
+- Verified clean: `mypy --strict` (35 source files under `app/`, `tests/`,
+  `scripts/`, `mock_upstream/`) and `pytest` (36 tests), both passing.
+
+Not started: dispatch, polish (phases 6–7).
 
 ## 13. Explicit non-goals / open questions for "next steps"
 

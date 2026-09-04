@@ -163,3 +163,260 @@ body {
   background: var(--color-accent-bg);
   color: var(--color-accent);
 }
+
+.badge-error {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.empty-state {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  margin: 0;
+}
+
+.back-link {
+  display: inline-block;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.back-link:hover {
+  color: var(--color-text);
+}
+
+/* Ingestion activity panel */
+
+.ingestion-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.ingestion-panel-header h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.run-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.run-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  padding: 8px 0;
+  border-top: 1px solid var(--color-surface-muted);
+}
+
+.run-row:first-child {
+  border-top: none;
+}
+
+.run-source {
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.run-counts {
+  color: var(--color-text-secondary);
+  flex: 1;
+}
+
+.run-time {
+  color: var(--color-text-secondary);
+}
+
+/* Filters */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.filters select {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-surface-muted);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.filters .btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Order list */
+
+.order-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.order-row {
+  border-top: 1px solid var(--color-surface-muted);
+}
+
+.order-row:first-child {
+  border-top: none;
+}
+
+.order-row-link {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 4px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.order-avatar {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.order-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.order-name-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.order-name {
+  font-weight: 500;
+}
+
+.order-source-badge {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.order-meta-line {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.order-side {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.order-time {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+/* Order detail */
+
+.order-detail-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+  margin: 0;
+  width: 100%;
+}
+
+.detail-grid dt {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.detail-grid dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+.item-list,
+.event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item-row,
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--color-surface-muted);
+  font-size: 14px;
+}
+
+.item-row:first-child,
+.event-row:first-child {
+  border-top: none;
+}
+
+.item-name {
+  flex: 1;
+}
+
+.item-category {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.item-price {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.event-type {
+  flex: 1;
+  text-transform: capitalize;
+}
+
+.event-time {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}

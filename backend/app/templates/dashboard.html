@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Orders — Order Management{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1>Orders</h1>
+  <p class="page-subtitle">{{ total }} order{{ "" if total == 1 else "s" }} across all sources.</p>
+</header>
+
+<section class="card ingestion-panel">
+  <div class="ingestion-panel-header">
+    <h2>Ingestion activity</h2>
+    <button id="trigger-poll-btn" class="btn btn-secondary" type="button">Trigger poll</button>
+  </div>
+  {% if runs %}
+  <ul class="run-list">
+    {% for run in runs %}
+    <li class="run-row">
+      <span class="badge {{ 'badge-accent' if run.outcome.value == 'success' else ('badge-error' if run.outcome.value == 'failure' else '') }}">{{ run.outcome.value }}</span>
+      <span class="run-source">{{ run.source.value.replace('_', ' ') }}</span>
+      <span class="run-counts">
+        +{{ run.records_created }} created &middot; {{ run.records_updated }} updated
+        {%- if run.warnings_count %} &middot; {{ run.warnings_count }} warning{{ "" if run.warnings_count == 1 else "s" }}{% endif -%}
+      </span>
+      <span class="run-time">{{ run.started_at.strftime("%b %d, %H:%M:%S") }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-state">No ingestion activity yet.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <form class="filters" method="get" action="/">
+    <select name="source">
+      <option value="">All sources</option>
+      {% for s in sources %}
+      <option value="{{ s.value }}" {{ "selected" if filters.source == s else "" }}>{{ s.value }}</option>
+      {% endfor %}
+    </select>
+    <select name="order_status">
+      <option value="">All statuses</option>
+      {% for st in statuses %}
+      <option value="{{ st.value }}" {{ "selected" if filters.order_status == st else "" }}>{{ st.value }}</option>
+      {% endfor %}
+    </select>
+    <select name="restaurant">
+      <option value="">All restaurants</option>
+      {% for r in restaurants %}
+      <option value="{{ r }}" {{ "selected" if filters.restaurant == r else "" }}>{{ r }}</option>
+      {% endfor %}
+    </select>
+    <select name="meal">
+      <option value="">All meals</option>
+      {% for m in meals %}
+      <option value="{{ m.value }}" {{ "selected" if filters.meal == m else "" }}>{{ m.value }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-primary" type="submit">Filter</button>
+    {% if filters.source or filters.order_status or filters.restaurant or filters.meal %}
+    <a class="btn btn-secondary" href="/">Clear</a>
+    {% endif %}
+  </form>
+
+  {% if orders %}
+  <ul class="order-list">
+    {% for order in orders %}
+    <li class="order-row">
+      <a class="order-row-link" href="/orders/{{ order.id }}/view">
+        <span class="order-avatar">{{ (order.customer_first_name or "?")[0] | upper }}</span>
+        <span class="order-main">
+          <span class="order-name-line">
+            <span class="order-name">{{ order.customer_first_name or "Unknown" }} {{ order.customer_last_name or "" }}</span>
+            <span class="order-source-badge">{{ order.source.value.replace('_', ' ') }}{% if order.external_id %} &middot; {{ order.external_id }}{% endif %}</span>
+          </span>
+          <span class="order-meta-line">
+            {{ order.items | length }} item{{ "" if order.items | length == 1 else "s" }}
+            {%- if order.restaurant %} &middot; {{ order.restaurant }}{% endif -%}
+            {%- if order.notes %} &middot; <span class="badge">Notes</span>{% endif -%}
+          </span>
+        </span>
+        <span class="order-side">
+          <span class="badge {{ 'badge-accent' if order.status.value in ('delivered', 'dispatched') else '' }}">{{ order.status.value }}</span>
+          <span class="order-time">updated {{ order.updated_at.strftime("%b %d, %H:%M") }}</span>
+        </span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-state">No orders match these filters.</p>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/app.js"></script>
+{% endblock %}

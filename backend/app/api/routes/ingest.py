@@ -12,6 +12,7 @@ from app.db import get_session
 from app.ingestion.csv_upload import CsvIngestionError, ingest_csv_upload
 from app.ingestion.polling import poll_once
 from app.ingestion.webhook import WebhookIngestionError, ingest_webhook_order
+from app.services import queries
 
 router = APIRouter(tags=["ingestion"])
 
@@ -50,5 +51,15 @@ async def upload_csv(
 
 
 @router.get("/ingestion/runs")
-def list_ingestion_runs(offset: int = 0, limit: int = 50) -> IngestionRunListResponse:
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="not implemented yet")
+def list_ingestion_runs(
+    session: Annotated[Session, Depends(get_session)],
+    offset: int = 0,
+    limit: int = 50,
+) -> IngestionRunListResponse:
+    runs, total = queries.list_ingestion_runs(session, offset=offset, limit=limit)
+    return IngestionRunListResponse(
+        items=[IngestionRunRead.model_validate(run) for run in runs],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )

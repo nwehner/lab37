@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Order {{ order.id }} — Order Management{% endblock %}
+
+{% block content %}
+<a class="back-link" href="/">&larr; Back to orders</a>
+
+<header class="page-header">
+  <h1>{{ order.customer_first_name or "Unknown" }} {{ order.customer_last_name or "" }}</h1>
+  <p class="page-subtitle">
+    {{ order.source.value.replace('_', ' ') }}
+    {%- if order.external_id %} &middot; {{ order.external_id }}{% endif -%}
+    {%- if order.restaurant %} &middot; {{ order.restaurant }}{% endif -%}
+  </p>
+</header>
+
+<section class="card order-detail-summary">
+  <span class="badge {{ 'badge-accent' if order.status.value in ('delivered', 'dispatched') else '' }}">{{ order.status.value }}</span>
+  <dl class="detail-grid">
+    <div><dt>Created</dt><dd>{{ order.created_at.strftime("%b %d, %Y %H:%M") }}</dd></div>
+    <div><dt>Updated</dt><dd>{{ order.updated_at.strftime("%b %d, %Y %H:%M") }}</dd></div>
+    {% if order.total is not none %}<div><dt>Total</dt><dd>${{ "%.2f"|format(order.total) }}</dd></div>{% endif %}
+    {% if order.meal %}<div><dt>Meal</dt><dd>{{ order.meal.value }}{% if order.for_tomorrow %} (tomorrow){% endif %}</dd></div>{% endif %}
+    {% if order.notes %}<div><dt>Notes</dt><dd>{{ order.notes }}</dd></div>{% endif %}
+  </dl>
+</section>
+
+<section class="card">
+  <h2>Items</h2>
+  {% if order.items %}
+  <ul class="item-list">
+    {% for item in order.items %}
+    <li class="item-row">
+      <span class="item-name">{{ item.name }}</span>
+      {% if item.category %}<span class="item-category">{{ item.category }}</span>{% endif %}
+      {% if item.price is not none %}<span class="item-price">${{ "%.2f"|format(item.price) }}</span>{% endif %}
+      {% if item.status %}<span class="badge {{ 'badge-accent' if item.status.value == 'delivered' else '' }}">{{ item.status.value }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-state">No items.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>History</h2>
+  {% if events %}
+  <ul class="event-list">
+    {% for event in events %}
+    <li class="event-row">
+      <span class="event-type">{{ event.event_type.value.replace('_', ' ') }}</span>
+      <span class="event-time">{{ event.created_at.strftime("%b %d, %Y %H:%M:%S") }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-state">No events yet.</p>
+  {% endif %}
+</section>
+{% endblock %}
