@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Upload CSV — Order Management{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1>Upload orders CSV</h1>
+  <p class="page-subtitle">Upload a CSV export to ingest orders. Rows with unrecognized items or
+    values are still ingested, flagged with a warning.</p>
+</header>
+
+<section class="card">
+  <form id="upload-form">
+    <label class="file-drop" for="csv-file">
+      <span id="file-drop-label">Choose a CSV file or drag it here</span>
+      <input id="csv-file" name="file" type="file" accept=".csv,text/csv" required />
+    </label>
+    <button class="btn btn-primary" type="submit">Upload</button>
+  </form>
+</section>
+
+<section id="upload-result" class="card" hidden>
+  <h2 id="upload-result-filename"></h2>
+  <div class="summary-row">
+    <div class="summary-stat">
+      <span class="summary-stat-value" id="upload-rows-ingested"></span>
+      <span class="summary-stat-label">rows ingested</span>
+    </div>
+    <div class="summary-stat">
+      <span class="summary-stat-value" id="upload-rows-warnings"></span>
+      <span class="summary-stat-label">rows with warnings</span>
+    </div>
+  </div>
+</section>
+
+<section id="upload-error" class="card card-error" hidden>
+  <p id="upload-error-message"></p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/app.js"></script>
+{% endblock %}

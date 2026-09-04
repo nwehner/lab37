@@ -1,0 +1,19 @@
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# uv-managed virtualenv
+backend/.venv/
+
+# SQLite database + WAL/SHM files
+backend/*.db
+backend/*.db-wal
+backend/*.db-shm
+
+# local env overrides
+.env

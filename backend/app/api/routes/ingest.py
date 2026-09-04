@@ -1,0 +1,40 @@
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
+from sqlmodel import Session
+
+from app.api.schemas import CsvUploadSummary, IngestionRunListResponse, IngestionRunRead, OrderRead
+from app.db import get_session
+from app.ingestion.csv_upload import CsvIngestionError, ingest_csv_upload
+
+router = APIRouter(tags=["ingestion"])
+
+
+@router.post("/ingest/webhook/orders")
+async def receive_webhook_order(request: Request) -> OrderRead:
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="not implemented yet")
+
+
+@router.post("/ingest/poll/trigger")
+async def trigger_poll() -> IngestionRunRead:
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="not implemented yet")
+
+
+@router.post("/ingest/csv")
+async def upload_csv(
+    file: UploadFile,
+    session: Annotated[Session, Depends(get_session)],
+) -> CsvUploadSummary:
+    content = await file.read()
+    filename = file.filename or "upload.csv"
+    try:
+        return ingest_csv_upload(session, filename, content)
+    except CsvIngestionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/ingestion/runs")
+def list_ingestion_runs(offset: int = 0, limit: int = 50) -> IngestionRunListResponse:
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="not implemented yet")

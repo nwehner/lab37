@@ -1,0 +1,36 @@
+[project]
+name = "order-management-backend"
+version = "0.1.0"
+description = "Order ingestion and management system MVP"
+authors = [
+    { name = "Nick Wehner", email = "nicholas.wehner@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "sqlmodel>=0.0.22",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.20",
+    "httpx>=0.28",
+    "pydantic-settings>=2.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "mypy>=1.14",
+]
+
+[tool.uv]
+package = false
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+mypy_path = "app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
