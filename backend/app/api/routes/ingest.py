@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlmodel import Session
 
 from app.api.schemas import CsvUploadSummary, IngestionRunListResponse, IngestionRunRead, OrderRead
+from app.config import get_settings
 from app.db import get_session
 from app.ingestion.csv_upload import CsvIngestionError, ingest_csv_upload
+from app.ingestion.polling import poll_once
 from app.ingestion.webhook import WebhookIngestionError, ingest_webhook_order
 
 router = APIRouter(tags=["ingestion"])
@@ -26,8 +29,11 @@ async def receive_webhook_order(
 
 
 @router.post("/ingest/poll/trigger")
-async def trigger_poll() -> IngestionRunRead:
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="not implemented yet")
+async def trigger_poll(session: Annotated[Session, Depends(get_session)]) -> IngestionRunRead:
+    settings = get_settings()
+    async with httpx.AsyncClient(base_url=settings.polling_api_base_url, timeout=10.0) as client:
+        run = await poll_once(session, client)
+    return IngestionRunRead.model_validate(run)
 
 
 @router.post("/ingest/csv")

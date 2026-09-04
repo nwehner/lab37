@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ORDER_MGMT_", env_file=".env", extra="ignore")
 
     database_url: str = f"sqlite:///{BACKEND_DIR / 'order_management.db'}"
+    polling_enabled: bool = True
     polling_api_base_url: str = "http://localhost:8001"
     polling_interval_seconds: float = 30.0
     polling_backoff_initial_seconds: float = 5.0

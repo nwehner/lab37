@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
@@ -20,7 +21,7 @@ from app.models import (
 
 SPECS_DIR = Path(__file__).resolve().parent.parent.parent / "specs"
 
-NEW_ORDER_PAYLOAD = {
+NEW_ORDER_PAYLOAD: dict[str, Any] = {
     "order_id": "test-order-1",
     "order_source": "Overeats",
     "restaurant": "Sam & Ella's",

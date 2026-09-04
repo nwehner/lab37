@@ -12,6 +12,10 @@ from pathlib import Path
 _tmp_dir = tempfile.TemporaryDirectory(prefix="order_mgmt_test_")
 atexit.register(_tmp_dir.cleanup)
 os.environ["ORDER_MGMT_DATABASE_URL"] = f"sqlite:///{Path(_tmp_dir.name) / 'test.db'}"
+# The real background poller targets a live upstream (localhost:8001 by default);
+# tests exercise polling logic directly against an in-process mock app instead, so
+# the app-level scheduler must not also start hitting the network in the background.
+os.environ["ORDER_MGMT_POLLING_ENABLED"] = "false"
 
 import pytest  # noqa: E402
 from sqlmodel import SQLModel  # noqa: E402

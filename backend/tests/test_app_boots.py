@@ -13,5 +13,4 @@ def test_health() -> None:
 def test_route_stubs_registered() -> None:
     with TestClient(app) as client:
         assert client.get("/orders").status_code == 501
-        assert client.post("/ingest/poll/trigger").status_code == 501
         assert client.get("/ingestion/runs").status_code == 501

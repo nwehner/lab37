@@ -594,8 +594,73 @@ already reflected in the model/route code above).
 - Verified clean: `mypy --strict` (20 source files) and `pytest` (18
   tests), both passing.
 
-Not started: polling pipeline, orders API/dashboard, dispatch, polish
-(phases 4–7).
+**Phase 4 — Polling pipeline: complete.**
+
+- `app/ingestion/polling.py`: `poll_once(session, client)` implements §4.2 —
+  for each item in the poll response's `data`, upsert `OrderItem` by
+  `external_item_id` (the hash) and upsert its parent `Order` by
+  `(POLLING_API, str(order))`, appending `ITEM_STATUS_CHANGED` whenever a
+  new item is created or an existing one's status differs from what's
+  stored. `get_last_poll_cursor()` derives the `time_since` cursor from the
+  most recent `SUCCESS`/`PARTIAL` `IngestionRun` for this source, rather
+  than a separate state table — consistent with how `IngestionRun` is
+  already used elsewhere as the source of truth for ingestion history. Per
+  §3: a `200` or a `500` that still carries non-empty `data` both ingest
+  and advance the cursor (`SUCCESS` / `PARTIAL` respectively, `PARTIAL`
+  carrying the upstream's `error` in the run's `message`); a `500` with no
+  usable `data` ingests nothing and leaves the cursor where it was
+  (`FAILURE`). `client` is an injected `httpx.AsyncClient` rather than a
+  hardcoded URL specifically so tests (and the mock upstream) can exercise
+  it over a real ASGI transport instead of a stubbed bypass.
+- One addition beyond §4.2's literal text: `_derive_order_status()`
+  recomputes the parent `Order.status` from the aggregate of its items'
+  statuses after each poll (`DELIVERED` when every item is delivered,
+  `IN_PREP` when any item has progressed past `ordered`, else left at
+  `RECEIVED`) — this is what backs §2's `OrderStatus.IN_PREP` ("derived
+  from polling item statuses, when applicable"), which §4.2 names but
+  doesn't spell out the derivation rule for. It never overrides a
+  `CANCELLED` or manually `DISPATCHED` order.
+- `mock_upstream/app.py`: a small FastAPI app (`create_app()`, parameterized
+  by a line list so tests can inject synthetic scenarios) that replays
+  `specs/api_responses.jsonl` sequentially over `GET /poll` — each line's
+  own `response` field becomes the actual HTTP status code of the reply
+  (so a `500` line in the corpus really answers with HTTP 500 and its
+  `data`/`error` body), which is what makes the polling client's
+  fault-tolerance branches (§3) exercise real HTTP semantics rather than a
+  fabricated shortcut. `POST /reset` rewinds its cursor, for tests that
+  need to replay the same line twice.
+- `PollingScheduler` (in `polling.py`) runs the interval-based background
+  poller from §4.2 as an asyncio task started/stopped in `app/main.py`'s
+  lifespan, gated by a new `ORDER_MGMT_POLLING_ENABLED` setting (default
+  `true`) — added specifically so the test suite (`tests/conftest.py` sets
+  it `false`) doesn't spin up a real background poller hitting
+  `localhost:8001` during every test. On `FAILURE` it waits out
+  `PollingBackoff`'s current (capped-exponential) delay instead of the
+  normal interval before retrying; any other outcome resets the backoff.
+  `POST /ingest/poll/trigger` wired to call `poll_once()` directly for
+  on-demand polls (demos/tests), per §4.2.
+- Tests: `tests/test_polling_ingestion.py` (8 tests) — new-item ingestion
+  with cursor advancement, same-hash re-poll is a no-op, a status
+  progression (`ordered` → `processing`) both updates the item and derives
+  `Order.status = IN_PREP`, a `500` with no data fails without advancing
+  the cursor, a `500` with partial data ingests and advances the cursor as
+  `PARTIAL`, backoff growth/reset, and a full real-corpus run against the
+  actual `specs/api_responses.jsonl` asserting the exact outcome
+  breakdown (96 `SUCCESS` / 2 `PARTIAL` / 2 `FAILURE`, matching the file's
+  4 `response: 500` lines — 2 with usable data and 2 without, per §1) and
+  that every distinct polling `order` id ends up as one `Order` row.
+- Verified live, not just via `TestClient`: ran `mock_upstream.app` and the
+  real app as two separate `uvicorn` processes and called
+  `POST /ingest/poll/trigger` 100 times against the real network stack.
+  Outcomes matched the test suite exactly (96/2/2), and the resulting
+  database held exactly 60 orders and 264 items — both independently
+  confirmed against the raw file (60 distinct `order` values, 264 distinct
+  item hashes across all 100 lines).
+- Verified clean: `mypy --strict` (23 source files under `app/` +
+  `mock_upstream/`, 32 including `tests/` and `scripts/`) and `pytest` (25
+  tests), both passing.
+
+Not started: orders API/dashboard, dispatch, polish (phases 5–7).
 
 ## 13. Explicit non-goals / open questions for "next steps"
 
