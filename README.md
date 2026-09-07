@@ -47,11 +47,12 @@ You can upload order CSVs at `http://localhost:8000/upload`
 
 ### Next steps
 
-1) For this MVP system, we're just using SQLite for the backend database. I'd use PostgreSQL or another more production-ready database for actual real-world use. 
-2) Costs are in floats, but since those aren't accurate enough when it comes to rounding pennies, I'd switch that to use a money data-type that stores data to precisely two decimal points. 
-3) There's no pagination of the dashboard order list which would certainly be nice as orders grow in volume.
-4) I've only added filters in the order list for the `source` of an order, its `status`, the `restaurant` and `meal` type: it might be nice to filter by specific order items, too. 
-5) The design is very MVP and grey-scale. It could definitely use some more visual appeal! 
+1) There's no authentication whatsoever. Presumably there would be different users/roles that could be used to close-down the app. 
+2) For this MVP system, we're just using SQLite for the backend database. I'd use PostgreSQL or another more production-ready database for actual real-world use. 
+3) Costs are in floats, but since those aren't accurate enough when it comes to rounding pennies, I'd switch that to use a money data-type that stores data to precisely two decimal points. 
+4) There's no pagination of the dashboard order list which would certainly be nice as orders grow in volume.
+5) I've only added filters in the order list for the `source` of an order, its `status`, the `restaurant` and `meal` type: it might be nice to filter by specific order items, too. 
+6) The design is very MVP and grey-scale. It could definitely use some more visual appeal! 
 
 ## Quickstart
 
