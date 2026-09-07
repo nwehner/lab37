@@ -5,6 +5,46 @@ webhook, polling API, and CSV upload — tracks status and per-order history, an
 dispatch payload for a downstream robotic assembly system. See
 `docs/plans/mvp-order-management-plan.md` for the full design.
 
+## TL;DR
+
+This build assumes you're running a vanilla MacBook, so the stack is simply Python/HTML/JS to make sharing easy.
+
+You can get the app fully installed (so long as UV is available) via `make install` and then start it up with `make run` to see the dashboard running at `http://localhost:8000`. 
+
+Or, if you'd like to see a demo, you can start everything up with `make run-all`: This demos the system as it would run in real life by mocking orders created from `specs/api_responses.jsonl` one line at a time. Each poll by the API replays an order from the spec as though the order was created via the webhook pipeline.
+
+![Order dashboard with ingestion activity and filters](docs/orders.png)
+
+Click on an order to see the full details and to optionally dispatch the order to the robot. Orders are not dispatched to the robot automatically: only when the "Dispatch to robot" button is pressed is the payload sent. 
+
+The dispatch payload sent to the robot looks like this:
+
+```json
+{
+  "order_id": "bd679691-d3d7-4dc7-9d57-5879a3b6d8a1",
+  "source": "csv_upload",
+  "restaurant": "Tasty Burger",
+  "meal": "breakfast",
+  "requested_for": "today",
+  "items": [
+    { "name": "Ciabatta rolls", "category": "bakery", "quantity": 1 },
+    { "name": "Beef chow fun", "category": "entree", "quantity": 1 }
+  ],
+  "dispatched_at": "2026-09-07T20:41:59.751513Z"
+}
+```
+
+`requested_for` is `null` for orders that don't carry a "for tomorrow" flag (webhook and polling
+orders); `restaurant`/`meal` are `null` for polling-sourced orders, which don't carry those
+fields. This same payload is what gets stored as the `ORDER_DISPATCHED` event's detail in the
+order's history.
+
+![CSV upload page](docs/order.png)
+
+You can upload order CSVs at `http://localhost:8000/upload`
+
+![CSV upload page](docs/csv-upload.png)
+
 ## Quickstart
 
 A `Makefile` at the repo root wraps everything below. From the repo root:
@@ -102,6 +142,35 @@ isn't already `dispatched`/`cancelled`.
 | `GET` | `/orders/{id}/events` | Order event/history timeline |
 | `POST` | `/orders/{id}/dispatch` | Transition to `dispatched`, return the robot dispatch payload |
 | `GET` | `/ingestion/runs` | Recent ingestion run log (per pipeline) |
+
+**Uploading a CSV via the API** — `POST /ingest/csv` takes a multipart file upload (field name
+`file`):
+
+```bash
+curl -F "file=@../specs/orders_4.csv" http://localhost:8000/ingest/csv
+```
+
+The response is a per-file summary (rows ingested vs. rows ingested-with-a-warning) rather than a
+bare success/fail — a row with an unrecognized `items` token, `meal`, or `tomorrow` value still
+gets ingested (raw text preserved) instead of failing the whole upload.
+
+**Filtering orders via the API** — `GET /orders` accepts `source`, `order_status`, `restaurant`,
+and `meal` as query params (all optional, combinable, and paginated via `offset`/`limit`):
+
+```bash
+# All orders from a specific restaurant
+curl "http://localhost:8000/orders?restaurant=Tasty%20Burger"
+
+# Delivered orders that came in via CSV upload
+curl "http://localhost:8000/orders?source=csv_upload&order_status=delivered"
+
+# Dinner orders, second page of 25
+curl "http://localhost:8000/orders?meal=dinner&offset=25&limit=25"
+```
+
+Omit a param entirely to leave that dimension unfiltered — `source`/`order_status`/`meal` must
+either be omitted or match one of the enum values in `/docs`; an empty value (e.g. `meal=`) is
+treated the same as omitting it, matching the "All ..." option in the dashboard's filter form.
 
 **Running the tests / type checker** (from `backend/`):
 
