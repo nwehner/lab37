@@ -5,6 +5,21 @@ webhook, polling API, and CSV upload — tracks status and per-order history, an
 dispatch payload for a downstream robotic assembly system. See
 `docs/plans/mvp-order-management-plan.md` for the full design.
 
+## Quickstart
+
+A `Makefile` at the repo root wraps everything below. From the repo root:
+
+```bash
+make install    # uv sync
+make run-all    # main app on :8000 + mock polling upstream on :8001, Ctrl+C stops both
+make mock-all   # in another terminal: replay webhook orders, trigger a poll, upload a CSV
+make test       # pytest
+```
+
+Then open `http://localhost:8000`. Run `make help` for the full target list (`run`/`run-mock`
+individually, `typecheck`, `check`, `clean`, and each mock-data target on its own). The rest of
+this document explains what those targets do and how to run the equivalent commands by hand.
+
 ## 1. Install
 
 Requires Python 3.12+. Dependencies are managed with [`uv`](https://docs.astral.sh/uv/); if you
@@ -58,6 +73,9 @@ Configuration is via environment variables (prefix `ORDER_MGMT_`, or a `backend/
 
 To verify everything's up: `curl http://localhost:8000/health` should return `{"status": "ok"}`.
 
+Shortcut: `make run` starts just the main app; `make run-mock` starts just the mock upstream;
+`make run-all` starts both together from the repo root (Ctrl+C stops both).
+
 ## 3. Use
 
 **Dashboard** — `http://localhost:8000/` — a filterable table of every ingested order
@@ -92,6 +110,8 @@ uv run pytest
 uv run mypy --strict app tests
 ```
 
+Shortcut, from the repo root: `make test`, `make typecheck`, or `make check` for both.
+
 ## Adding mock orders
 
 The system starts out empty — there's no seed data, so you'll want to inject orders to see it
@@ -111,6 +131,9 @@ instance), `--file` (replay a different file with the same shape — handy for h
 synthetic orders). Re-running it is safe: redelivered `order_id`s upsert instead of duplicating,
 so it also doubles as a demo of that idempotency.
 
+Shortcut, from the repo root: `make mock-webhook` (pass flags through with
+`make mock-webhook ARGS="--delay 0.05 --limit 50"`).
+
 **Polling API** — run the mock upstream (§2 above) alongside the main app pointed at it
 (`ORDER_MGMT_POLLING_API_BASE_URL=http://localhost:8001`, the default). It replays
 `specs/api_responses.jsonl` one line per call. Then either:
@@ -121,6 +144,9 @@ so it also doubles as a demo of that idempotency.
 `curl -X POST http://localhost:8001/reset` rewinds the mock upstream's cursor back to the start
 of the file if you want to replay it again.
 
+Shortcut, from the repo root: `make mock-poll` (force a poll cycle) and `make mock-reset`
+(rewind the mock upstream's cursor).
+
 **CSV upload** — through the browser at `http://localhost:8000/upload`, or:
 
 ```bash
@@ -130,5 +156,7 @@ curl -F "file=@../specs/orders_4.csv" http://localhost:8000/ingest/csv
 `orders_4.csv` is the full 267-row corpus (a cumulative superset of `orders_1..3.csv`), so it's
 the one to use for the most data in one shot.
 
+Shortcut, from the repo root: `make mock-csv`.
+
 All three can be run concurrently against the same live app to see orders from every source
-merge into one order list at once.
+merge into one order list at once. `make mock-all` runs all three at once.
