@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from sqlmodel import Session
 
+from app.api.params import EmptyStrToNone
 from app.api.schemas import IngestionRunRead, OrderEventRead, OrderRead
 from app.db import get_session
 from app.models import IngestionSource, MealType, OrderStatus
@@ -23,10 +24,10 @@ RECENT_RUNS_LIMIT = 10
 def dashboard(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
-    source: IngestionSource | None = None,
-    order_status: OrderStatus | None = None,
-    restaurant: str | None = None,
-    meal: MealType | None = None,
+    source: Annotated[IngestionSource | None, EmptyStrToNone] = None,
+    order_status: Annotated[OrderStatus | None, EmptyStrToNone] = None,
+    restaurant: Annotated[str | None, EmptyStrToNone] = None,
+    meal: Annotated[MealType | None, EmptyStrToNone] = None,
     offset: int = 0,
 ) -> HTMLResponse:
     orders, total = queries.list_orders(

@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
+from app.api.params import EmptyStrToNone
 from app.api.schemas import OrderEventRead, OrderListResponse, OrderRead
 from app.db import get_session
 from app.models import IngestionSource, MealType, OrderStatus
@@ -19,10 +20,10 @@ router = APIRouter(tags=["orders"])
 @router.get("/orders")
 def list_orders(
     session: Annotated[Session, Depends(get_session)],
-    source: IngestionSource | None = None,
-    order_status: OrderStatus | None = None,
-    restaurant: str | None = None,
-    meal: MealType | None = None,
+    source: Annotated[IngestionSource | None, EmptyStrToNone] = None,
+    order_status: Annotated[OrderStatus | None, EmptyStrToNone] = None,
+    restaurant: Annotated[str | None, EmptyStrToNone] = None,
+    meal: Annotated[MealType | None, EmptyStrToNone] = None,
     offset: int = 0,
     limit: int = 50,
 ) -> OrderListResponse:
