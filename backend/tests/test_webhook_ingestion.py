@@ -104,6 +104,32 @@ def test_cancellation_event_marks_existing_order_cancelled() -> None:
         ]
 
 
+def test_cancellation_of_never_seen_order_id_still_ingests_it_as_cancelled() -> None:
+    """Not present in the sample corpus, but the cancellation payload carries every
+    field a creation payload does, so per plan §4.1/Phase 3 it's still fully ingestible
+    rather than rejected for referencing an unknown order_id."""
+    cancel_payload = {**NEW_ORDER_PAYLOAD, "order_id": "never-seen-order", "update": ["cancelled"]}
+
+    with TestClient(app) as client:
+        response = client.post("/ingest/webhook/orders", json=cancel_payload)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
+
+    with Session(engine) as session:
+        order = session.exec(
+            select(Order).where(Order.source == IngestionSource.WEBHOOK, Order.external_id == "never-seen-order")
+        ).one()
+        assert order.status == OrderStatus.CANCELLED
+        assert {item.name for item in order.items} == set(NEW_ORDER_PAYLOAD["items"])
+
+        events = session.exec(select(OrderEvent).where(OrderEvent.order_id == order.id)).all()
+        assert [e.event_type for e in events] == [
+            OrderEventType.ORDER_RECEIVED,
+            OrderEventType.ORDER_CANCELLED,
+        ]
+
+
 def test_malformed_payload_is_rejected_and_logged_as_failed_run() -> None:
     bad_payload = {"order_id": "missing-fields-order"}
 

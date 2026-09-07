@@ -81,3 +81,60 @@ def test_upload_rejects_file_missing_items_column() -> None:
         )
 
     assert response.status_code == 400
+
+
+def test_upload_rejects_file_that_cannot_be_decoded_as_utf8() -> None:
+    # A byte sequence that is invalid UTF-8 on its own (a lone continuation byte).
+    csv_content = b"first_name,last_name,items,notes,tomorrow,meal\n\xff\xfe,Lovelace,Espresso,,true,breakfast\n"
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/ingest/csv",
+            files={"file": ("undecodable.csv", csv_content, "text/csv")},
+        )
+
+    assert response.status_code == 400
+
+    with Session(engine) as session:
+        orders = session.exec(select(Order).where(Order.source == IngestionSource.CSV_UPLOAD)).all()
+        assert orders == []
+
+        runs = session.exec(select(IngestionRun).where(IngestionRun.source == IngestionSource.CSV_UPLOAD)).all()
+        assert len(runs) == 1
+        assert runs[0].outcome == IngestionRunOutcome.FAILURE
+        assert runs[0].message is not None
+
+
+def test_upload_row_with_unrecognized_meal_and_tomorrow_values_produces_warnings() -> None:
+    csv_content = (
+        b"first_name,last_name,items,notes,tomorrow,meal\n"
+        b"Ada,Lovelace,Espresso,,maybe,brunch\n"
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/ingest/csv",
+            files={"file": ("edge_case.csv", csv_content, "text/csv")},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rows_ingested"] == 1
+    assert body["rows_with_warnings"] == 1
+
+    with Session(engine) as session:
+        order = session.exec(
+            select(Order).where(
+                Order.source == IngestionSource.CSV_UPLOAD,
+                Order.customer_first_name == "Ada",
+            )
+        ).one()
+        # The row still ingests with the fields left unset rather than failing.
+        assert order.meal is None
+        assert order.for_tomorrow is None
+
+        events = session.exec(select(OrderEvent).where(OrderEvent.order_id == order.id)).all()
+        warning_reasons = {
+            e.detail["reason"] for e in events if e.event_type == OrderEventType.INGESTION_WARNING
+        }
+        assert warning_reasons == {"unrecognized_meal_value", "unrecognized_tomorrow_value"}

@@ -164,6 +164,56 @@ async def test_response_500_with_partial_data_ingests_and_advances_cursor() -> N
         assert run.message is not None and "partial data" in run.message
 
 
+async def test_upstream_network_error_fails_without_advancing_cursor() -> None:
+    def _raise(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    transport = httpx.MockTransport(_raise)
+
+    with Session(engine) as session:
+        async with httpx.AsyncClient(transport=transport, base_url="http://mock-upstream") as client:
+            run = await poll_once(session, client)
+
+        assert run.outcome == IngestionRunOutcome.FAILURE
+        assert run.message is not None and "upstream request failed" in run.message
+        assert get_last_poll_cursor(session) is None
+        assert session.exec(select(Order).where(Order.source == IngestionSource.POLLING_API)).all() == []
+
+
+async def test_upstream_non_json_response_fails_without_advancing_cursor() -> None:
+    def _bad_body(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"not json")
+
+    transport = httpx.MockTransport(_bad_body)
+
+    with Session(engine) as session:
+        async with httpx.AsyncClient(transport=transport, base_url="http://mock-upstream") as client:
+            run = await poll_once(session, client)
+
+        assert run.outcome == IngestionRunOutcome.FAILURE
+        assert run.message is not None and "non-JSON body" in run.message
+        assert get_last_poll_cursor(session) is None
+
+
+async def test_second_poll_sends_own_tracked_cursor_as_time_since_param() -> None:
+    seen_params: list[str | None] = []
+
+    def _record_and_reply(request: httpx.Request) -> httpx.Response:
+        seen_params.append(request.url.params.get("time_since"))
+        return httpx.Response(200, json={"response": 200, "data": {}})
+
+    transport = httpx.MockTransport(_record_and_reply)
+
+    with Session(engine) as session:
+        async with httpx.AsyncClient(transport=transport, base_url="http://mock-upstream") as client:
+            first = await poll_once(session, client)
+            second = await poll_once(session, client)
+
+        assert seen_params[0] is None
+        assert seen_params[1] == first.started_at.isoformat()
+        assert seen_params[1] != second.started_at.isoformat()
+
+
 def test_backoff_grows_on_failure_and_resets_on_success() -> None:
     backoff = PollingBackoff(initial_seconds=5.0, max_seconds=40.0)
 
