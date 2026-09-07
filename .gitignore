@@ -8,12 +8,12 @@ __pycache__/
 .ruff_cache/
 
 # uv-managed virtualenv
-backend/.venv/
+app/.venv/
 
 # SQLite database + WAL/SHM files
-backend/*.db
-backend/*.db-wal
-backend/*.db-shm
+app/*.db
+app/*.db-wal
+app/*.db-shm
 
 # local env overrides
 .env

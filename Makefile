@@ -1,7 +1,7 @@
 .PHONY: help install run run-mock run-all test typecheck check \
         mock-webhook mock-poll mock-csv mock-reset mock-all clean
 
-BACKEND := backend
+APP_DIR := app
 SPECS   := specs
 
 help:
@@ -35,31 +35,31 @@ install:
 		echo "uv not found — install it first: curl -LsSf https://astral.sh/uv/install.sh | sh"; \
 		exit 1; \
 	}
-	cd $(BACKEND) && uv sync
+	cd $(APP_DIR) && uv sync
 
 run:
-	cd $(BACKEND) && uv run uvicorn app.main:app --reload
+	cd $(APP_DIR) && uv run uvicorn app.main:app --reload
 
 run-mock:
-	cd $(BACKEND) && uv run uvicorn mock_upstream.app:app --port 8001
+	cd $(APP_DIR) && uv run uvicorn mock_upstream.app:app --port 8001
 
 run-all:
-	cd $(BACKEND); \
+	cd $(APP_DIR); \
 	uv run uvicorn mock_upstream.app:app --port 8001 & \
 	mock_pid=$$!; \
 	trap "kill $$mock_pid 2>/dev/null" EXIT INT TERM; \
 	uv run uvicorn app.main:app --reload
 
 test:
-	cd $(BACKEND) && uv run pytest
+	cd $(APP_DIR) && uv run pytest
 
 typecheck:
-	cd $(BACKEND) && uv run mypy --strict app tests
+	cd $(APP_DIR) && uv run mypy --strict app tests
 
 check: test typecheck
 
 mock-webhook:
-	cd $(BACKEND) && uv run python scripts/replay_webhook.py $(ARGS)
+	cd $(APP_DIR) && uv run python scripts/replay_webhook.py $(ARGS)
 
 mock-poll:
 	curl -sf -X POST http://localhost:8000/ingest/poll/trigger | python3 -m json.tool
@@ -74,5 +74,5 @@ mock-reset:
 mock-all: mock-webhook mock-poll mock-csv
 
 clean:
-	rm -f $(BACKEND)/order_management.db $(BACKEND)/order_management.db-shm $(BACKEND)/order_management.db-wal
-	rm -rf $(BACKEND)/.pytest_cache $(BACKEND)/.mypy_cache
+	rm -f $(APP_DIR)/order_management.db $(APP_DIR)/order_management.db-shm $(APP_DIR)/order_management.db-wal
+	rm -rf $(APP_DIR)/.pytest_cache $(APP_DIR)/.mypy_cache

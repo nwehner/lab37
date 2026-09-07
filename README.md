@@ -7,7 +7,7 @@ dispatch payload for a downstream robotic assembly system. See
 
 ## TL;DR
 
-This build assumes you're running a vanilla MacBook, so the stack is simply Python/HTML/JS to make sharing easy.
+This build assumes you're running a vanilla MacBook, so the stack is simply Python/HTML/JS and SQLite to make sharing easy.
 
 You can get the app fully installed (so long as UV is available) via `make install` and then start it up with `make run` to see the dashboard running at `http://localhost:8000`. 
 
@@ -45,6 +45,14 @@ You can upload order CSVs at `http://localhost:8000/upload`
 
 ![CSV upload page](docs/csv-upload.png)
 
+### Next steps
+
+1) For this MVP system, we're just using SQLite for the backend database. I'd use PostgreSQL or another more production-ready database for actual real-world use. 
+2) Costs are in floats, but since those aren't accurate enough when it comes to rounding pennies, I'd switch that to use a money data-type that stores data to precisely two decimal points. 
+3) There's no pagination of the dashboard order list which would certainly be nice as orders grow in volume.
+4) I've only added filters in the order list for the `source` of an order, its `status`, the `restaurant` and `meal` type: it might be nice to filter by specific order items, too. 
+5) The design is very MVP and grey-scale. It could definitely use some more visual appeal! 
+
 ## Quickstart
 
 A `Makefile` at the repo root wraps everything below. From the repo root:
@@ -69,14 +77,14 @@ don't have it:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Then, from `backend/`:
+Then, from `app/`:
 
 ```bash
-cd backend
+cd app
 uv sync
 ```
 
-This creates `backend/.venv` and installs everything in `pyproject.toml` (FastAPI, SQLModel,
+This creates `app/.venv` and installs everything in `pyproject.toml` (FastAPI, SQLModel,
 Jinja2, httpx, etc., plus the `pytest`/`mypy` dev group).
 
 ## 2. Start
@@ -85,26 +93,26 @@ The system is two independent processes: the main app, and (optionally) the mock
 upstream it polls against.
 
 ```bash
-# from backend/
+# from app/
 uv run uvicorn app.main:app --reload
 ```
 
 The app boots on `http://localhost:8000`, creates its SQLite database
-(`backend/order_management.db`, WAL mode) on first run, and starts an in-process poller that
+(`app/order_management.db`, WAL mode) on first run, and starts an in-process poller that
 targets `http://localhost:8001` every 30 seconds by default. If nothing is listening there yet,
 poll attempts will just fail and retry with backoff — harmless, but if you want the polling
 pipeline to actually do something, also run the mock upstream in a second terminal:
 
 ```bash
-# from backend/, in a second terminal
+# from app/, in a second terminal
 uv run uvicorn mock_upstream.app:app --port 8001
 ```
 
-Configuration is via environment variables (prefix `ORDER_MGMT_`, or a `backend/.env` file):
+Configuration is via environment variables (prefix `ORDER_MGMT_`, or an `app/.env` file):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ORDER_MGMT_DATABASE_URL` | `sqlite:///backend/order_management.db` | SQLite connection string |
+| `ORDER_MGMT_DATABASE_URL` | `sqlite:///app/order_management.db` | SQLite connection string |
 | `ORDER_MGMT_POLLING_ENABLED` | `true` | Run the in-process background poller |
 | `ORDER_MGMT_POLLING_API_BASE_URL` | `http://localhost:8001` | Where the poller looks for `/poll` |
 | `ORDER_MGMT_POLLING_INTERVAL_SECONDS` | `30.0` | Delay between successful polls |
@@ -172,7 +180,7 @@ Omit a param entirely to leave that dimension unfiltered — `source`/`order_sta
 either be omitted or match one of the enum values in `/docs`; an empty value (e.g. `meal=`) is
 treated the same as omitting it, matching the "All ..." option in the dashboard's filter form.
 
-**Running the tests / type checker** (from `backend/`):
+**Running the tests / type checker** (from `app/`):
 
 ```bash
 uv run pytest
@@ -186,7 +194,7 @@ Shortcut, from the repo root: `make test`, `make typecheck`, or `make check` for
 The system starts out empty — there's no seed data, so you'll want to inject orders to see it
 do anything. All three ingestion pipelines have a mock/injection mechanism built for exactly
 this, driven off the real sample files in `specs/`. With the app running on `:8000` (§2 above),
-from `backend/`:
+from `app/`:
 
 **Webhook** — replay `specs/webhook_orders.jsonl` against the live endpoint:
 
