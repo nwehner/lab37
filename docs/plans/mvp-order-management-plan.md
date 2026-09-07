@@ -102,6 +102,7 @@ class ItemStatus(str, Enum):  # only ever populated for polling-sourced items
     PROCESSING = "processing"
     WITH_COURIER = "with_courier"
     DELIVERED = "delivered"
+    CANCELLED = "cancelled"  # not in the sample corpus; added per §4.2's cancellation note
 
 class MealType(str, Enum):
     BREAKFAST = "breakfast"
@@ -207,6 +208,20 @@ by `external_item_id` (the hash), upsert its parent `Order` by `(POLLING_API, st
 not already present, append `ITEM_STATUS_CHANGED` when `status` differs from what's stored.
 Also exposed as `POST /ingest/poll/trigger` so a poll can be forced on demand (for demos and
 tests) instead of waiting on the scheduler.
+
+**Cancellations:** the spec states this API "may return... cancellations," but the sample
+`api_responses.jsonl` corpus never actually exercises this — no line carries `status:
+"cancelled"` or any other cancellation signal. Since the item-status feed is this API's only
+channel for carrying such a thing, we extended `ItemStatus` with `CANCELLED` and treat it as a
+terminal per-item outcome, same tier as `DELIVERED`: an order whose items are *all* `CANCELLED`
+is derived to `OrderStatus.CANCELLED` (with an explicit `ORDER_CANCELLED` event, mirroring the
+webhook pipeline, so it's visible in the order's history rather than a silent status flip); a
+`CANCELLED` order is excluded from further derivation, same as a `DISPATCHED` one, so a later
+poll can't reopen it. An order with a *mix* of `CANCELLED` and `DELIVERED` items (nothing left
+pending) resolves to `DELIVERED` rather than `CANCELLED`, since part of the order did go out. A
+`CANCELLED` item alongside still-active items (`ORDERED`/`PROCESSING`/`WITH_COURIER`) doesn't
+cancel the order — it's just one fewer item still coming. This is a documented assumption, not
+something verified against real sample data, since none exists for this case.
 
 ### 4.3 CSV upload
 `POST /ingest/csv` (multipart file upload) — for each row, `first_name`/`last_name`/`notes`/
@@ -782,6 +797,21 @@ already reflected in the model/route code above).
   both passing.
 
 Not started: polish (phase 7).
+
+**Post-review addendum — polling-API cancellations.** A review against the original spec
+flagged that the polling pipeline had no handling for cancellations at all, despite the spec
+naming them explicitly. Addressed per §4.2's new "Cancellations" note: `ItemStatus.CANCELLED`
+added, `_derive_order_status` in `app/ingestion/polling.py` extended to resolve an all-cancelled
+order to `OrderStatus.CANCELLED` with an explicit `ORDER_CANCELLED` event, and a
+partially-cancelled order to `DELIVERED` once nothing is left pending. Cancelled orders are
+surfaced through the existing `GET /orders?order_status=cancelled` filter, order detail, and
+event-timeline endpoints — no new API surface was needed, since `OrderStatus.CANCELLED` and
+those endpoints already existed for the webhook pipeline's cancellations. 5 new tests added
+(`tests/test_polling_ingestion.py`: all-cancelled, partially-cancelled, one-cancelled-among-
+pending, and cancelled-not-reopened-by-a-later-poll; `tests/test_orders_api.py`: an end-to-end
+check that a polling-cancelled order actually appears via `/orders`, `/orders/{id}`, and
+`/orders/{id}/events`). Verified clean: `mypy --strict` (32 source files) and `pytest`
+(51 tests).
 
 ## 13. Explicit non-goals / open questions for "next steps"
 

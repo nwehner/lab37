@@ -22,6 +22,7 @@ class ItemStatus(str, Enum):
     PROCESSING = "processing"
     WITH_COURIER = "with_courier"
     DELIVERED = "delivered"
+    CANCELLED = "cancelled"
 
 
 class MealType(str, Enum):

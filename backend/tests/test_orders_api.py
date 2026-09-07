@@ -3,9 +3,14 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+import httpx
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
+from app.db import engine
+from app.ingestion.polling import poll_once
 from app.main import app
+from mock_upstream.app import create_app
 
 ORDER_PAYLOAD: dict[str, Any] = {
     "order_id": "orders-api-test-1",
@@ -66,6 +71,34 @@ def test_list_orders_filters_by_source_and_status() -> None:
 
     assert empty.status_code == 200
     assert empty.json()["total"] == 0
+
+
+async def test_polling_cancelled_order_is_surfaced_via_orders_api() -> None:
+    poll_lines: list[dict[str, object]] = [
+        {
+            "response": 200,
+            "data": {"hash-1": {"order": 1, "name": "Espresso", "category": "drink", "price": 3.5, "status": "cancelled"}},
+        }
+    ]
+    mock_app = create_app(poll_lines)
+
+    with Session(engine) as session:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=mock_app), base_url="http://mock-upstream"
+        ) as client:
+            await poll_once(session, client)
+
+    with TestClient(app) as client:
+        listing = client.get("/orders", params={"order_status": "cancelled"})
+        assert listing.status_code == 200
+        assert listing.json()["total"] == 1
+        order_id = listing.json()["items"][0]["id"]
+
+        detail = client.get(f"/orders/{order_id}")
+        assert detail.json()["status"] == "cancelled"
+
+        events = client.get(f"/orders/{order_id}/events").json()
+        assert [e["event_type"] for e in events] == ["order_received", "item_status_changed", "order_cancelled"]
 
 
 def test_get_order_returns_json_by_default() -> None:

@@ -38,6 +38,8 @@ from app.models import (
 # the parent Order's status (§2: OrderStatus.IN_PREP is "derived from polling
 # item statuses, when applicable").
 _IN_PREP_STATUSES = {ItemStatus.PROCESSING, ItemStatus.WITH_COURIER}
+# Terminal per-item outcomes: nothing further happens to an item once it's here.
+_TERMINAL_STATUSES = {ItemStatus.DELIVERED, ItemStatus.CANCELLED}
 _DERIVABLE_ORDER_STATUSES = {OrderStatus.RECEIVED, OrderStatus.IN_PREP, OrderStatus.DELIVERED}
 
 
@@ -218,15 +220,32 @@ def _ingest_items(session: Session, data: dict[str, Any]) -> tuple[int, int]:
 
 
 def _derive_order_status(session: Session, order_id: uuid.UUID) -> None:
+    """Derive `order.status` from its items' polled statuses.
+
+    Cancellation isn't observed anywhere in the sample `api_responses.jsonl`
+    corpus (no line ever carries `status: "cancelled"`), but the spec states
+    the polling API "may return... cancellations", and the item-status feed
+    is the only channel this API shape has to carry one. We treat
+    `ItemStatus.CANCELLED` the same way an item reaching `DELIVERED` is
+    treated: a terminal per-item outcome. An order whose items are *all*
+    cancelled is itself cancelled (and gets an explicit `ORDER_CANCELLED`
+    event, mirroring the webhook pipeline, so it shows up in the order's
+    history — not just a silent status flip). An order with a mix of
+    cancelled and delivered items (nothing left pending) is treated as
+    resolved/`DELIVERED` rather than cancelled, since some of what was
+    ordered did go out.
+    """
     order = session.get(Order, order_id)
     if order is None or order.status not in _DERIVABLE_ORDER_STATUSES:
-        return  # never override a manually dispatched or cancelled order
+        return  # never override a manually dispatched order, or one already resolved by an earlier derivation
 
     statuses = [item.status for item in order.items if item.status is not None]
     if not statuses:
         return
 
-    if all(s == ItemStatus.DELIVERED for s in statuses):
+    if all(s == ItemStatus.CANCELLED for s in statuses):
+        new_status = OrderStatus.CANCELLED
+    elif all(s in _TERMINAL_STATUSES for s in statuses):
         new_status = OrderStatus.DELIVERED
     elif any(s in _IN_PREP_STATUSES or s == ItemStatus.DELIVERED for s in statuses):
         new_status = OrderStatus.IN_PREP
@@ -237,6 +256,15 @@ def _derive_order_status(session: Session, order_id: uuid.UUID) -> None:
         order.status = new_status
         order.updated_at = datetime.now(UTC)
         session.add(order)
+        if new_status == OrderStatus.CANCELLED:
+            session.add(
+                OrderEvent(
+                    order_id=order.id,
+                    event_type=OrderEventType.ORDER_CANCELLED,
+                    source=IngestionSource.POLLING_API,
+                    detail={"reason": "all items reported cancelled via polling"},
+                )
+            )
 
 
 def _finish(

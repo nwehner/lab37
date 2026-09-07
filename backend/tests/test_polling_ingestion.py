@@ -131,6 +131,149 @@ async def test_status_progression_updates_item_and_derives_order_status() -> Non
         }
 
 
+async def test_all_items_cancelled_cancels_the_order_and_logs_an_event() -> None:
+    lines: list[dict[str, object]] = [
+        {
+            "response": 200,
+            "data": {
+                "hash-1": {"order": 1, "name": "Espresso", "category": "drink", "price": 3.5, "status": "ordered"},
+                "hash-2": {"order": 1, "name": "Croissant", "category": "food", "price": 4.0, "status": "ordered"},
+            },
+        },
+        {
+            "response": 200,
+            "data": {
+                "hash-1": {
+                    "order": 1,
+                    "name": "Espresso",
+                    "category": "drink",
+                    "price": 3.5,
+                    "status": "cancelled",
+                },
+                "hash-2": {
+                    "order": 1,
+                    "name": "Croissant",
+                    "category": "food",
+                    "price": 4.0,
+                    "status": "cancelled",
+                },
+            },
+        },
+    ]
+
+    with Session(engine) as session:
+        async with _mock_client(lines) as client:
+            await poll_once(session, client)
+            await poll_once(session, client)
+
+        order = session.exec(
+            select(Order).where(Order.source == IngestionSource.POLLING_API, Order.external_id == "1")
+        ).one()
+        assert order.status == OrderStatus.CANCELLED
+        assert all(item.status == ItemStatus.CANCELLED for item in order.items)
+
+        events = session.exec(select(OrderEvent).where(OrderEvent.order_id == order.id)).all()
+        assert [e.event_type for e in events].count(OrderEventType.ORDER_CANCELLED) == 1
+
+
+async def test_partially_cancelled_order_with_rest_delivered_is_delivered_not_cancelled() -> None:
+    lines: list[dict[str, object]] = [
+        {
+            "response": 200,
+            "data": {
+                "hash-1": {
+                    "order": 1,
+                    "name": "Espresso",
+                    "category": "drink",
+                    "price": 3.5,
+                    "status": "cancelled",
+                },
+                "hash-2": {
+                    "order": 1,
+                    "name": "Croissant",
+                    "category": "food",
+                    "price": 4.0,
+                    "status": "delivered",
+                },
+            },
+        }
+    ]
+
+    with Session(engine) as session:
+        async with _mock_client(lines) as client:
+            await poll_once(session, client)
+
+        order = session.exec(
+            select(Order).where(Order.source == IngestionSource.POLLING_API, Order.external_id == "1")
+        ).one()
+        assert order.status == OrderStatus.DELIVERED
+
+        events = session.exec(select(OrderEvent).where(OrderEvent.order_id == order.id)).all()
+        assert OrderEventType.ORDER_CANCELLED not in [e.event_type for e in events]
+
+
+async def test_one_cancelled_item_among_still_pending_items_does_not_cancel_the_order() -> None:
+    lines: list[dict[str, object]] = [
+        {
+            "response": 200,
+            "data": {
+                "hash-1": {
+                    "order": 1,
+                    "name": "Espresso",
+                    "category": "drink",
+                    "price": 3.5,
+                    "status": "cancelled",
+                },
+                "hash-2": {
+                    "order": 1,
+                    "name": "Croissant",
+                    "category": "food",
+                    "price": 4.0,
+                    "status": "processing",
+                },
+            },
+        }
+    ]
+
+    with Session(engine) as session:
+        async with _mock_client(lines) as client:
+            await poll_once(session, client)
+
+        order = session.exec(
+            select(Order).where(Order.source == IngestionSource.POLLING_API, Order.external_id == "1")
+        ).one()
+        assert order.status == OrderStatus.IN_PREP
+
+
+async def test_cancelled_order_is_not_reopened_by_a_later_poll() -> None:
+    lines: list[dict[str, object]] = [
+        {
+            "response": 200,
+            "data": {
+                "hash-1": {"order": 1, "name": "Espresso", "category": "drink", "price": 3.5, "status": "cancelled"}
+            },
+        },
+        {
+            "response": 200,
+            "data": {
+                "hash-2": {"order": 1, "name": "Croissant", "category": "food", "price": 4.0, "status": "ordered"}
+            },
+        },
+    ]
+
+    with Session(engine) as session:
+        async with _mock_client(lines) as client:
+            await poll_once(session, client)
+            await poll_once(session, client)
+
+        order = session.exec(
+            select(Order).where(Order.source == IngestionSource.POLLING_API, Order.external_id == "1")
+        ).one()
+        # A cancelled order is resolved — a later poll adding a new item to the
+        # same external order id must not silently reopen it.
+        assert order.status == OrderStatus.CANCELLED
+
+
 async def test_response_500_with_no_data_fails_and_does_not_advance_cursor() -> None:
     lines: list[dict[str, object]] = [{"response": 500, "error": "upstream exploded"}]
 
