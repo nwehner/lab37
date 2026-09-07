@@ -57,7 +57,7 @@ def _merge_tokens(tokens: list[str], known_items: frozenset[str]) -> list[Parsed
 
 
 def parse_items_field(raw: str, known_items: frozenset[str] | None = None) -> list[ParsedCsvItem]:
-    """Parse a CSV `items` field into individual menu items, per plan §4.3.
+    """Parse a CSV `items` field into individual menu items.
 
     1. Split on newlines (used when an item's own name contains a comma inside
        parentheses) into candidate lines.

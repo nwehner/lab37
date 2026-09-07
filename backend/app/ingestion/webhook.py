@@ -19,7 +19,7 @@ from app.models import (
 
 
 class WebhookOrderPayload(BaseModel):
-    """Shape of one line in `specs/webhook_orders.jsonl` (plan §1)."""
+    """Shape of one line in `specs/webhook_orders.jsonl`."""
 
     order_id: str
     order_source: str
@@ -37,7 +37,7 @@ class WebhookIngestionError(Exception):
 
 
 def ingest_webhook_order(session: Session, raw_payload: dict[str, Any]) -> Order:
-    """Upsert one webhook order-creation or cancellation event, per plan §4.1.
+    """Upsert one webhook order-creation or cancellation event.
 
     Idempotent by design: redelivering the same `order_id` (a common webhook
     retry behavior) upserts the existing order and appends `ORDER_UPDATED`

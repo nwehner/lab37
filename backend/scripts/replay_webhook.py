@@ -1,10 +1,9 @@
 """Replay specs/webhook_orders.jsonl against a running webhook endpoint.
 
-This is both a mock data injector (plan §8 — "an easy way to inject
-additional orders") and the mechanism for exercising the webhook pipeline's
-actual HTTP behavior — idempotent upsert on redelivery, cancellation
-handling — which pytest against the ingestion function alone doesn't cover,
-since that never goes over the wire.
+This is both an easy way to inject additional orders and the mechanism for
+exercising the webhook pipeline's actual HTTP behavior — idempotent upsert
+on redelivery, cancellation handling — which pytest against the ingestion
+function alone doesn't cover, since that never goes over the wire.
 
 Usage:
     uv run python scripts/replay_webhook.py

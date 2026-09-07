@@ -28,11 +28,11 @@ class RobotDispatchPayload(BaseModel):
 
 
 class DispatchError(Exception):
-    """`order` isn't in a dispatchable state (plan §6)."""
+    """`order` isn't in a dispatchable state."""
 
 
 def dispatch_order(session: Session, order: Order) -> RobotDispatchPayload:
-    """Transition `order` to `DISPATCHED` and build its robot payload, per plan §6.
+    """Transition `order` to `DISPATCHED` and build its robot payload.
 
     Rejects (`DispatchError`) an order that's already dispatched, cancelled, or
     has no items — otherwise builds the skeleton payload, appends an

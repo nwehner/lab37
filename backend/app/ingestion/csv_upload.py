@@ -28,9 +28,9 @@ class CsvIngestionError(Exception):
 
 
 def ingest_csv_upload(session: Session, filename: str, content: bytes) -> CsvUploadSummary:
-    """Parse and persist one uploaded CSV file, per plan §4.3.
+    """Parse and persist one uploaded CSV file.
 
-    Per-row parsing is non-fatal (§3): a row with an unrecognized `items` token,
+    Per-row parsing is non-fatal: a row with an unrecognized `items` token,
     `meal`, or `tomorrow` value still produces an `Order` (raw text preserved) plus an
     `INGESTION_WARNING` event, rather than aborting the whole file. Only a file that
     can't be decoded or lacks the expected columns raises `CsvIngestionError`.

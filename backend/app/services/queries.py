@@ -17,7 +17,7 @@ def list_orders(
     offset: int = 0,
     limit: int = 50,
 ) -> tuple[list[Order], int]:
-    """Filtered, paginated order listing for the dashboard and `GET /orders` (plan §5, §7)."""
+    """Filtered, paginated order listing for the dashboard and `GET /orders`."""
     query = select(Order)
     count_query = select(func.count()).select_from(Order)
     if source is not None:

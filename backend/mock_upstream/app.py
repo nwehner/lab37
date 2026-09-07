@@ -1,12 +1,12 @@
 """Mock polling upstream that replays `specs/api_responses.jsonl`, one line
-per call, per plan §8.
+per call.
 
 This lets the real polling client (`app/ingestion/polling.py`) exercise
 actual HTTP request/response handling — including the real `response: 500`
 lines, some with usable partial `data` and some without — instead of a
 stubbed bypass. Each line's own `response` field becomes the real HTTP
 status code of the reply, since that's the field the polling client's
-fault-tolerance logic (plan §3) actually branches on.
+fault-tolerance logic actually branches on.
 
 Run standalone:
     uv run uvicorn mock_upstream.app:app --port 8001

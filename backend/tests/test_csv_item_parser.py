@@ -61,7 +61,7 @@ def _iter_unique_csv_rows() -> list[dict[str, str]]:
 
 
 def test_full_csv_corpus_parses_with_no_unmatched_items() -> None:
-    """orders_4.csv is a cumulative superset of orders_1..3.csv (plan §1), so parsing
+    """orders_4.csv is a cumulative superset of orders_1..3.csv, so parsing
     it alone against the real known-item catalog covers every row in the corpus."""
     known = load_known_items()
     rows = _iter_unique_csv_rows()

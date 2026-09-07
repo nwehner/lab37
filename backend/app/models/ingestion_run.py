@@ -12,7 +12,7 @@ class IngestionRun(SQLModel, table=True):
     """A record of one ingestion attempt (webhook delivery, poll cycle, or CSV upload).
 
     Written for every attempt, not just failures, so the ingestion-activity panel
-    (plan §7) has real data and fault patterns are visible without log-diving (§3).
+    has real data and fault patterns are visible without log-diving.
     """
 
     __tablename__ = "ingestion_run"

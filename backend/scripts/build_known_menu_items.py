@@ -1,7 +1,7 @@
 """One-time build script for app/data/known_menu_items.json.
 
 Unions item names from specs/webhook_orders.jsonl (`items`) and
-specs/api_responses.jsonl (`data[*].name`) into a sorted catalog, per plan §4.3.
+specs/api_responses.jsonl (`data[*].name`) into a sorted catalog.
 Re-run and re-commit the output only if the spec files change.
 """
 

@@ -106,8 +106,8 @@ def test_cancellation_event_marks_existing_order_cancelled() -> None:
 
 def test_cancellation_of_never_seen_order_id_still_ingests_it_as_cancelled() -> None:
     """Not present in the sample corpus, but the cancellation payload carries every
-    field a creation payload does, so per plan §4.1/Phase 3 it's still fully ingestible
-    rather than rejected for referencing an unknown order_id."""
+    field a creation payload does, so it's still fully ingestible rather than
+    rejected for referencing an unknown order_id."""
     cancel_payload = {**NEW_ORDER_PAYLOAD, "order_id": "never-seen-order", "update": ["cancelled"]}
 
     with TestClient(app) as client:

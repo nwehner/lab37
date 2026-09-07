@@ -1,13 +1,12 @@
-"""Polling-API ingestion pipeline, per plan §4.2 and the fault-tolerance
-strategy in §3.
+"""Polling-API ingestion pipeline with fault-tolerant cursor bookkeeping.
 
 The client tracks its own `time_since` cursor — the upstream payload has no
-timestamps at all (plan §1), so this is bookkeeping we own, not something we
-get back. The cursor only advances past a poll whose `response == 200`, or a
-`500` that still carried usable `data` (tagged `PARTIAL`, per §3). A `500`
-with no usable data leaves the cursor where it was, so the same window is
-re-requested on the next attempt. Because item hash ids are stable across
-polls, re-ingesting an overlapping window is naturally idempotent.
+timestamps at all, so this is bookkeeping we own, not something we get back.
+The cursor only advances past a poll whose `response == 200`, or a `500`
+that still carried usable `data` (tagged `PARTIAL`). A `500` with no usable
+data leaves the cursor where it was, so the same window is re-requested on
+the next attempt. Because item hash ids are stable across polls, re-ingesting
+an overlapping window is naturally idempotent.
 """
 
 from __future__ import annotations
@@ -35,8 +34,7 @@ from app.models import (
 )
 
 # Item statuses that mean "past ordered, not yet delivered" — used to derive
-# the parent Order's status (§2: OrderStatus.IN_PREP is "derived from polling
-# item statuses, when applicable").
+# the parent Order's status (OrderStatus.IN_PREP is derived from these).
 _IN_PREP_STATUSES = {ItemStatus.PROCESSING, ItemStatus.WITH_COURIER}
 # Terminal per-item outcomes: nothing further happens to an item once it's here.
 _TERMINAL_STATUSES = {ItemStatus.DELIVERED, ItemStatus.CANCELLED}
@@ -46,9 +44,8 @@ _DERIVABLE_ORDER_STATUSES = {OrderStatus.RECEIVED, OrderStatus.IN_PREP, OrderSta
 class PollingBackoff:
     """In-process capped-exponential backoff state for the poll loop.
 
-    Not persisted: per plan §13, the polling scheduler runs in-process at
-    prototype scale, and backoff timing is only meaningful within one
-    running process's own retry loop.
+    Not persisted: the polling scheduler runs in-process, so backoff timing
+    is only meaningful within one running process's own retry loop.
     """
 
     def __init__(self, initial_seconds: float, max_seconds: float) -> None:
@@ -83,7 +80,7 @@ async def poll_once(session: Session, client: httpx.AsyncClient) -> IngestionRun
     """Perform one poll cycle against `client` and persist the outcome.
 
     `client` is an injected `httpx.AsyncClient` rather than a hardcoded URL
-    so tests can point it at an in-process mock ASGI app (plan §8) via
+    so tests can point it at an in-process mock ASGI app via
     `httpx.ASGITransport` instead of a live server, while still exercising
     real HTTP request/response handling.
     """
@@ -115,7 +112,7 @@ async def poll_once(session: Session, client: httpx.AsyncClient) -> IngestionRun
         created, updated = _ingest_items(session, data)
         _finish(session, run, IngestionRunOutcome.SUCCESS, records_created=created, records_updated=updated)
     elif data:
-        # A 500 that still carries usable data (plan §1, §3) — ingest what's there.
+        # A 500 that still carries usable data — ingest what's there.
         created, updated = _ingest_items(session, data)
         _finish(
             session,
@@ -292,14 +289,13 @@ async def _run_one_poll(base_url: str) -> IngestionRun:
 
 
 class PollingScheduler:
-    """In-process interval scheduler for the polling pipeline (plan §4.2).
+    """In-process interval scheduler for the polling pipeline.
 
-    Runs as a background asyncio task for the lifetime of the app (§13:
-    an in-process scheduler is fine at prototype scale; a real scheduler
-    like Celery beat or cron is the documented upgrade path). On failure it
-    waits out the current backoff instead of the regular interval before
-    retrying; a success resets the backoff and returns to the normal
-    interval.
+    Runs as a background asyncio task for the lifetime of the app (fine at
+    prototype scale; a real scheduler like Celery beat or cron would be the
+    upgrade path for production). On failure it waits out the current
+    backoff instead of the regular interval before retrying; a success
+    resets the backoff and returns to the normal interval.
     """
 
     def __init__(self, base_url: str, interval_seconds: float, backoff: PollingBackoff) -> None:
