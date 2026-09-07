@@ -1,0 +1,134 @@
+# Order Management System
+
+An order ingestion + management system that merges orders from three parallel sources —
+webhook, polling API, and CSV upload — tracks status and per-order history, and skeletons a
+dispatch payload for a downstream robotic assembly system. See
+`docs/plans/mvp-order-management-plan.md` for the full design.
+
+## 1. Install
+
+Requires Python 3.12+. Dependencies are managed with [`uv`](https://docs.astral.sh/uv/); if you
+don't have it:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Then, from `backend/`:
+
+```bash
+cd backend
+uv sync
+```
+
+This creates `backend/.venv` and installs everything in `pyproject.toml` (FastAPI, SQLModel,
+Jinja2, httpx, etc., plus the `pytest`/`mypy` dev group).
+
+## 2. Start
+
+The system is two independent processes: the main app, and (optionally) the mock polling
+upstream it polls against.
+
+```bash
+# from backend/
+uv run uvicorn app.main:app --reload
+```
+
+The app boots on `http://localhost:8000`, creates its SQLite database
+(`backend/order_management.db`, WAL mode) on first run, and starts an in-process poller that
+targets `http://localhost:8001` every 30 seconds by default. If nothing is listening there yet,
+poll attempts will just fail and retry with backoff — harmless, but if you want the polling
+pipeline to actually do something, also run the mock upstream in a second terminal:
+
+```bash
+# from backend/, in a second terminal
+uv run uvicorn mock_upstream.app:app --port 8001
+```
+
+Configuration is via environment variables (prefix `ORDER_MGMT_`, or a `backend/.env` file):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ORDER_MGMT_DATABASE_URL` | `sqlite:///backend/order_management.db` | SQLite connection string |
+| `ORDER_MGMT_POLLING_ENABLED` | `true` | Run the in-process background poller |
+| `ORDER_MGMT_POLLING_API_BASE_URL` | `http://localhost:8001` | Where the poller looks for `/poll` |
+| `ORDER_MGMT_POLLING_INTERVAL_SECONDS` | `30.0` | Delay between successful polls |
+| `ORDER_MGMT_POLLING_BACKOFF_INITIAL_SECONDS` | `5.0` | Backoff start on poll failure |
+| `ORDER_MGMT_POLLING_BACKOFF_MAX_SECONDS` | `300.0` | Backoff cap |
+
+To verify everything's up: `curl http://localhost:8000/health` should return `{"status": "ok"}`.
+
+## 3. Use
+
+**Dashboard** — `http://localhost:8000/` — a filterable table of every ingested order
+(filter by source/status/restaurant/meal) plus an ingestion-activity panel showing recent
+webhook/poll/CSV runs, with a "Trigger poll" button to force an immediate poll cycle.
+
+**Order detail** — click any row, or go to `http://localhost:8000/orders/{id}/view` — current
+fields, items (with category/price/status where the polling pipeline populated them), and the
+full event/history timeline. A "Dispatch to robot" button appears once the order has ≥1 item and
+isn't already `dispatched`/`cancelled`.
+
+**CSV upload** — `http://localhost:8000/upload` — pick a file, submit, and see a per-file summary
+(rows ingested, rows with warnings) rather than a bare success/fail.
+
+**JSON API** (interactive docs at `http://localhost:8000/docs`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/ingest/webhook/orders` | Webhook receiver |
+| `POST` | `/ingest/poll/trigger` | Force an immediate poll cycle |
+| `POST` | `/ingest/csv` | CSV file upload (multipart) |
+| `GET` | `/orders` | List orders — filter by `source`, `order_status`, `restaurant`, `meal`; paginated |
+| `GET` | `/orders/{id}` | Order detail, including current items |
+| `GET` | `/orders/{id}/events` | Order event/history timeline |
+| `POST` | `/orders/{id}/dispatch` | Transition to `dispatched`, return the robot dispatch payload |
+| `GET` | `/ingestion/runs` | Recent ingestion run log (per pipeline) |
+
+**Running the tests / type checker** (from `backend/`):
+
+```bash
+uv run pytest
+uv run mypy --strict app tests
+```
+
+## Adding mock orders
+
+The system starts out empty — there's no seed data, so you'll want to inject orders to see it
+do anything. All three ingestion pipelines have a mock/injection mechanism built for exactly
+this, driven off the real sample files in `specs/`. With the app running on `:8000` (§2 above),
+from `backend/`:
+
+**Webhook** — replay `specs/webhook_orders.jsonl` against the live endpoint:
+
+```bash
+uv run python scripts/replay_webhook.py
+```
+
+Useful flags: `--delay 0.05` (sleep between requests, to simulate bursty real-time traffic),
+`--limit 50` (only replay the first N lines), `--base-url` (target a different running
+instance), `--file` (replay a different file with the same shape — handy for hand-written
+synthetic orders). Re-running it is safe: redelivered `order_id`s upsert instead of duplicating,
+so it also doubles as a demo of that idempotency.
+
+**Polling API** — run the mock upstream (§2 above) alongside the main app pointed at it
+(`ORDER_MGMT_POLLING_API_BASE_URL=http://localhost:8001`, the default). It replays
+`specs/api_responses.jsonl` one line per call. Then either:
+
+- wait for the background scheduler (polls automatically every 30s by default), or
+- force it immediately: `curl -X POST http://localhost:8000/ingest/poll/trigger`
+
+`curl -X POST http://localhost:8001/reset` rewinds the mock upstream's cursor back to the start
+of the file if you want to replay it again.
+
+**CSV upload** — through the browser at `http://localhost:8000/upload`, or:
+
+```bash
+curl -F "file=@../specs/orders_4.csv" http://localhost:8000/ingest/csv
+```
+
+`orders_4.csv` is the full 267-row corpus (a cumulative superset of `orders_1..3.csv`), so it's
+the one to use for the most data in one shot.
+
+All three can be run concurrently against the same live app to see orders from every source
+merge into one order list at once.
