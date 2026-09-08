@@ -15,9 +15,7 @@ Or, if you'd like to see a demo, you can start everything up with `make run-all`
 
 ![Order dashboard with ingestion activity and filters](docs/orders.png)
 
-Click on an order to see the full details and to optionally dispatch the order to the robot. Orders are not dispatched to the robot automatically: only when the "Dispatch to robot" button is pressed is the payload sent. 
-
-The dispatch payload sent to the robot looks like this:
+Click on an order to see the full details and to optionally dispatch the order to the robot. The dispatch payload sent to the robot looks like this:
 
 ```json
 {
